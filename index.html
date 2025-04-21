@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
+    <style>
+        .message-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .user-message, .ai-message {
+            padding: 12px 18px;
+            border-radius: 24px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        
+        .user-message {
+            background-color: #007bff;
+            color: white;
+            margin-left: auto;
+        }
+        
+        .ai-message {
+            background-color: #f8f9fa;
+            color: #333;
+            border: 1px solid #e9ecef;
+        }
+        
+        .input-bar {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0 -2px 15px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #user-input {
+            flex-grow: 1;
+            padding: 12px 20px;
+            border: 1px solid #e9ecef;
+            border-radius: 24px;
+            font-size: 16px;
+        }
+        
+        #user-input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+        }
+        
+        .send-btn {
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .send-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2);
+        }
+        
+        .app-header {
+            text-align: center;
+            padding: 40px 20px;
+            background-color: #f8f9fa;
+            margin-bottom: 30px;
+        }
+        
+        .app-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .app-subtitle {
+            font-size: 1.25rem;
+            color: #6c757d;
+        }
+        .config-section {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .config-section input {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-header">
+        <h2 class="app-title">AI</h2>
+        <p class="app-subtitle">智能对话系统</p>
+    </div>
+
+    <div class="config-section">
+        <input type="text" id="api-key-input" placeholder="请输入API密钥">
+        <input type="text" id="model-name-input" placeholder="请输入模型名称">
+    </div>
+    
+    <div class="message-container" id="messageContainer"></div>
+    
+    <div class="input-bar">
+        <input type="text" id="user-input" placeholder="请输入你的问题...">
+        <button class="send-btn" onclick="sendMessage()"><i class="fas fa-paper-plane"></i> 发送</button>
+    </div>
+
+    <script>
+        const API_URL = 'https://api.deepseek.com/v1/chat/completions';
+
+        function createMessageElement(content, isUser) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = isUser ? 'user-message' : 'ai-message';
+            messageDiv.textContent = content;
+            return messageDiv;
+        }
+
+        function appendMessageToContainer(messageElement, isUser) {
+            const container = document.getElementById('messageContainer');
+            container.appendChild(messageElement);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const userInput = document.getElementById('user-input');
+            const inputText = userInput.value.trim();
+            
+            if (!inputText) return;
+
+            const apiKey = document.getElementById('api-key-input').value;
+            const modelName = document.getElementById('model-name-input').value;
+
+            if (!apiKey || !modelName) {
+                const errorMessage = createMessageElement('请输入有效的API密钥和模型名称', false);
+                appendMessageToContainer(errorMessage, false);
+                return;
+            }
+
+            const userMessage = createMessageElement(inputText, true);
+            appendMessageToContainer(userMessage, true);
+            userInput.value = '';
+
+            try {
+                const requestBody = {
+                    model: modelName,
+                    messages: [{role: 'user', content: inputText}],
+                    temperature: 0.7
+                };
+                console.log('请求体:', requestBody);
+
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                console.log('响应状态:', response.status);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.log('响应错误数据:', errorData);
+                    throw new Error(`请求失败，状态码: ${response.status}, 错误信息: ${errorData.error.message}`);
+                }
+
+                const data = await response.json();
+                console.log('响应数据:', data);
+                const aiReply = data.choices[0].message.content.trim();
+                const aiMessage = createMessageElement(aiReply, false);
+                appendMessageToContainer(aiMessage, false);
+
+            } catch (error) {
+                const errorMessage = createMessageElement(`请求出错: ${error.message}，请稍后再试`, false);
+                appendMessageToContainer(errorMessage, false);
+                console.error('API调用错误:', error);
+            }
+        }
+
+        // 监听回车事件
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
+    
